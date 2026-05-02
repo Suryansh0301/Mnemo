@@ -16,6 +16,7 @@ type Command struct {
 var commandsHandler map[enums.CommandName]func(Command, map[string]string) common.RespValue
 
 func init() {
+	commandsHandler = make(map[enums.CommandName]func(Command, map[string]string) common.RespValue)
 	commandsHandler[enums.PingCommandName] = HandlerPing
 	commandsHandler[enums.EchoCommandName] = HandlerEcho
 	commandsHandler[enums.SetCommandName] = HandlerSet
@@ -25,7 +26,11 @@ func init() {
 }
 
 func CommandHandler(commandName string) func(Command, map[string]string) common.RespValue {
-	return commandsHandler[enums.StringToCommandName(commandName)]
+	handler, exists := commandsHandler[enums.StringToCommandName(commandName)]
+	if !exists {
+		return nil
+	}
+	return handler
 }
 
 func HandlerPing(command Command, _ map[string]string) common.RespValue {
@@ -68,8 +73,8 @@ func HandlerSet(command Command, store map[string]string) common.RespValue {
 	}
 	store[command.Args[0]] = command.Args[1]
 	return common.RespValue{
-		Type: enums.BoolRespType,
-		Bool: true,
+		Type: enums.StringRespType,
+		Str:  "OK",
 	}
 }
 
@@ -116,8 +121,8 @@ func HandlerIncr(command Command, store map[string]string) common.RespValue {
 	integer = integer + 1
 	store[command.Args[0]] = strconv.Itoa(integer)
 	return common.RespValue{
-		Type: enums.BoolRespType,
-		Bool: true,
+		Type: enums.IntRespType,
+		Int:  int64(integer),
 	}
 }
 
@@ -129,9 +134,16 @@ func HandlerDel(command Command, store map[string]string) common.RespValue {
 			Error: err,
 		}
 	}
+	_, exists := store[command.Args[0]]
+	if !exists {
+		return common.RespValue{
+			Type: enums.IntRespType,
+			Int:  0,
+		}
+	}
 	delete(store, command.Args[0])
 	return common.RespValue{
-		Type: enums.BoolRespType,
-		Bool: true,
+		Type: enums.IntRespType,
+		Int:  1,
 	}
 }

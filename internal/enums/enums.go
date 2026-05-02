@@ -15,7 +15,6 @@ const (
 	IntRespType
 	ArrayRespType
 	ErrorRespType
-	BoolRespType
 )
 
 type CommandName string

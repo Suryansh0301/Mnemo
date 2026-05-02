@@ -8,7 +8,6 @@ type RespValue struct {
 	Int    int64
 	Array  []*RespValue
 	Error  error
-	Bool   bool
 	IsNull bool
 }
 
