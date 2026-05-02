@@ -23,6 +23,22 @@ type ParseResp struct {
 	err           error
 }
 
+func (r *RespValue) IsType(t enums.RespType) bool {
+	return r.Type == t
+}
+
+func (r *RespValue) IsEmpty() bool {
+	switch r.Type {
+	case enums.RespTypeArray:
+		return len(r.Array) == 0
+	case enums.RespTypeString:
+		return len(r.Str) == 0
+	default:
+		// as for other cases currently there is no value considered to be empty
+		return false
+	}
+}
+
 func getParseNeedMoreDataResp() ParseResp {
 	return ParseResp{
 		statusCode:    enums.StatusCodeNeedMoreData,
