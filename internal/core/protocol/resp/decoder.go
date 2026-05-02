@@ -4,35 +4,31 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/suryansh0301/mini-redis/internal/core/commands"
 	"github.com/suryansh0301/mini-redis/internal/enums"
 )
 
-type Command struct {
-	Name string
-	Args []string
-}
-
-func Decoder(parsedResp ParseResp) (Command, error) {
-	if !parsedResp.resp.IsType(enums.RespTypeArray) {
-		err := fmt.Errorf("expected array response, got %+v", parsedResp.resp.Type)
-		return Command{}, err
+func Decoder(parsedResp ParseResp) (command commands.Command, err error) {
+	if !parsedResp.resp.IsType(enums.ArrayRespType) {
+		err = fmt.Errorf("expected array response, got %+v", parsedResp.resp.Type)
+		return
 	}
 
 	if parsedResp.resp.IsNull || parsedResp.resp.IsEmpty() {
-		err := fmt.Errorf("invalid array response")
-		return Command{}, err
+		err = fmt.Errorf("invalid array response")
+		return
 
 	}
 
 	commandNameRespValue := parsedResp.resp.Array[0]
-	if !commandNameRespValue.IsType(enums.RespTypeString) {
-		err := fmt.Errorf("expected command name, got %+v", commandNameRespValue.Type)
-		return Command{}, err
+	if !commandNameRespValue.IsType(enums.StringRespType) {
+		err = fmt.Errorf("expected command name, got %+v", commandNameRespValue.Type)
+		return
 	}
 
 	if commandNameRespValue.IsNull || commandNameRespValue.IsEmpty() {
-		err := fmt.Errorf("invalid command name")
-		return Command{}, err
+		err = fmt.Errorf("invalid command name")
+		return
 	}
 	commandName := strings.ToUpper(commandNameRespValue.Str)
 
@@ -40,19 +36,19 @@ func Decoder(parsedResp ParseResp) (Command, error) {
 
 	args := make([]string, 0, len(commandArgsParsedResp))
 	for i := 0; i < len(commandArgsParsedResp); i++ {
-		if !commandArgsParsedResp[i].IsType(enums.RespTypeString) {
-			err := fmt.Errorf("expected command args, got %+v", commandArgsParsedResp[i].Type)
-			return Command{}, err
+		if !commandArgsParsedResp[i].IsType(enums.StringRespType) {
+			err = fmt.Errorf("expected command args, got %+v", commandArgsParsedResp[i].Type)
+			return
 		}
 
 		if commandArgsParsedResp[i].IsNull {
-			err := fmt.Errorf("invalid command args")
-			return Command{}, err
+			err = fmt.Errorf("invalid command args")
+			return
 		}
 		args = append(args, commandArgsParsedResp[i].Str)
 	}
 
-	return Command{
+	return commands.Command{
 		Name: commandName,
 		Args: args,
 	}, nil
