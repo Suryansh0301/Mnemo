@@ -96,6 +96,21 @@ func (c *client) handleConnection(conn net.Conn, exec *datastore.Executor) {
 			}
 
 			resp := exec.Execute(value)
+			byteResp := parser.Encoder(resp)
+			c.WriteBuffer = append(c.WriteBuffer, byteResp...)
+			n, err = c.Writer.Write(c.WriteBuffer)
+			if err != nil {
+				common.ProtocolError(err.Error())
+				return
+			}
+			if n > 0 {
+				err = c.Writer.Flush()
+				if err != nil {
+					common.ProtocolError(err.Error())
+					return
+				}
+			}
+
 		}
 
 		//execution -> for example the response is set into write buffer (just to figure out things)
