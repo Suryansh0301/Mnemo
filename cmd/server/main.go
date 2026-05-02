@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"log/slog"
 	"net"
 
@@ -18,7 +19,7 @@ type client struct {
 	WriteBuffer  []byte
 }
 
-func NewClient(connection net.Conn) *client {
+func newClient(connection net.Conn) *client {
 	reader := bufio.NewReader(connection)
 	writer := bufio.NewWriter(connection)
 
@@ -44,7 +45,7 @@ func (c *client) appendParseBuffer(n int) {
 }
 
 func main() {
-	listener, err := net.Listen("tcp", ":6379")
+	listener, err := net.Listen("tcp", ":8080")
 	if err != nil {
 		panic(err)
 	}
@@ -58,7 +59,7 @@ func main() {
 			panic(err)
 		}
 
-		client := NewClient(conn)
+		client := newClient(conn)
 		go client.handleConnection(conn, exec)
 	}
 }
@@ -96,6 +97,7 @@ func (c *client) handleConnection(conn net.Conn, exec *datastore.Executor) {
 			}
 
 			resp := exec.Execute(value)
+			fmt.Println(resp)
 			byteResp := parser.Encoder(resp)
 			c.WriteBuffer = append(c.WriteBuffer, byteResp...)
 			n, err = c.Writer.Write(c.WriteBuffer)
@@ -112,16 +114,5 @@ func (c *client) handleConnection(conn net.Conn, exec *datastore.Executor) {
 			}
 
 		}
-
-		//execution -> for example the response is set into write buffer (just to figure out things)
-		//_, err = writer.Write(writeBuffer)
-		//if err != nil {
-		//	return
-		//}
-
-		//err = writer.Flush()
-		//if err != nil {
-		//	return
-		//}
 	}
 }
