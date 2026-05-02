@@ -158,6 +158,57 @@ func checkBuffer(typeByte byte, index int, bufferValue []byte) ParseResp {
 			bytesConsumed: 1 + index + 2 + length + 2,
 		}
 
+	case '*':
+		if bufferValue[0] == '0' {
+			if len(bufferValue[:index]) > 1 {
+				return getParseErrorResp(fmt.Errorf("invalid array length"))
+			}
+			return ParseResp{
+				result:        constants.ResultTypeSuccess,
+				value:         "",
+				isEmpty:       true,
+				bytesConsumed: 1 + index + 2,
+			}
+		}
+
+		if bufferValue[0] == '-' {
+			if bufferValue[1] == '1' && len(bufferValue[:index]) == 2 {
+				return ParseResp{
+					result:        constants.ResultTypeSuccess,
+					value:         "",
+					bytesConsumed: 1 + index + 2,
+				}
+			}
+
+			return getParseErrorResp(fmt.Errorf("invalid array length"))
+		}
+
+		length := 0
+		for i := 0; i < index; i++ {
+			if bufferValue[i] < '0' || bufferValue[i] > '9' {
+				return getParseErrorResp(fmt.Errorf("invalid bulk length"))
+			}
+			length = length*10 + int(bufferValue[i]-'0')
+		}
+
+		totalConsumed := 1 + index + 2
+		for i := 0; i < length; i++ {
+			resp := Parse(bufferValue[index+2:])
+			if resp.result == constants.ResultTypeError {
+				return getParseErrorResp(resp.err)
+			}
+			if resp.result == constants.ResultTypeNeedMoreData {
+				return getParseNeedMoreDataResp()
+			}
+			totalConsumed += resp.bytesConsumed
+		}
+
+		return ParseResp{
+			result:        constants.ResultTypeSuccess,
+			value:         "",
+			bytesConsumed: totalConsumed,
+		}
+
 	default:
 		return getParseErrorResp(fmt.Errorf("invalid type byte"))
 	}
