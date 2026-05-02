@@ -23,10 +23,23 @@ RUN go mod download
 # destination will be /* wjicj means we are polluting the root directory.
 # if we need to exclude anything add to dockerignore file
 COPY . .
+
+#CGO stands for call C libraries , CGO_ENABLED=0 means compile pure go only
+#as the dependencies required for c libraries are not present ,
+
+# GOOS=linux means compile thinking the target OS is Linux
+# docker runs on linux and without this it might compile some other binary
+# which linux container cannot compile
+
+# GOARCH=amd64 means compile for 64 bit cpu ,
+# this is done to gurantee compaitability
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
   go build -o mini-redis ./cmd/server
 
 # ---- Runtime Stage ----
+# distroles image is basically an image containing the program and its runtime
+# dependencies and not the shells, package managers etc
+#hence these are very small compared to using alpine directly [ 2mb vs 5mb ]
 FROM gcr.io/distroless/base-debian12
 
 WORKDIR /app
@@ -39,3 +52,6 @@ COPY --from=builder /app/mini-redis .
 #this is the port we will export
 EXPOSE 6379
 ENTRYPOINT ["/app/mini-redis"]
+# the entrypoint here is defined in vector form here instead of
+# normally because distroless doesn't have a shell hence using
+# ENTRYPOINT "/app/mini-redis" will give error
