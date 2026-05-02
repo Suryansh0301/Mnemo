@@ -194,6 +194,9 @@ func checkBuffer(typeByte byte, index int, bufferValue []byte) ParseResp {
 		}
 
 	case '*':
+		if index == 0 {
+			return getParseErrorResp(fmt.Errorf("empty array length"))
+		}
 		if bufferValue[0] == '0' {
 			if len(bufferValue[:index]) > 1 {
 				return getParseErrorResp(fmt.Errorf("invalid array length"))
@@ -209,6 +212,9 @@ func checkBuffer(typeByte byte, index int, bufferValue []byte) ParseResp {
 		}
 
 		if bufferValue[0] == '-' {
+			if len(bufferValue[:index]) == 1 {
+				return getParseErrorResp(fmt.Errorf("invalid array length"))
+			}
 			if bufferValue[1] == '1' && len(bufferValue[:index]) == 2 {
 				return ParseResp{
 					statusCode: enums.StatusCodeSuccess,
@@ -226,15 +232,16 @@ func checkBuffer(typeByte byte, index int, bufferValue []byte) ParseResp {
 		length := 0
 		for i := 0; i < index; i++ {
 			if bufferValue[i] < '0' || bufferValue[i] > '9' {
-				return getParseErrorResp(fmt.Errorf("invalid bulk length"))
+				return getParseErrorResp(fmt.Errorf("invalid array length"))
 			}
 			length = length*10 + int(bufferValue[i]-'0')
 		}
 
 		totalConsumed := 1 + index + 2
+		cursor := index + 2
 		respValue := make([]*RespValue, 0, length)
 		for i := 0; i < length; i++ {
-			response := Parse(bufferValue[index+2:])
+			response := Parse(bufferValue[cursor:])
 			if response.statusCode == enums.StatusCodeError {
 				return getParseErrorResp(response.err)
 			}
@@ -242,6 +249,7 @@ func checkBuffer(typeByte byte, index int, bufferValue []byte) ParseResp {
 				return getParseNeedMoreDataResp()
 			}
 			totalConsumed += response.bytesConsumed
+			cursor += response.bytesConsumed
 			respValue = append(respValue, response.resp)
 		}
 
