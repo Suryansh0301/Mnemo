@@ -38,5 +38,9 @@ func init() {
 }
 
 func Encoder(resp common.RespValue) []byte {
-	return encoderHandler[resp.Type](resp)
+	handler, exists := encoderHandler[resp.Type]
+	if !exists {
+		return []byte("-ERR internal error\r\n")
+	}
+	return handler(resp)
 }

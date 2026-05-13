@@ -112,6 +112,10 @@ func parseBulkString(buffer []byte, index int) ParseResp {
 		return getParseErrorResp(common.ProtocolError("invalid bulk length"))
 	}
 
+	if length64 > int64(len(buffer)) {
+		return getParseNeedMoreDataResp()
+	}
+
 	length := int(length64)
 	payloadStart := index + 2
 	required := payloadStart + length + 2
@@ -158,6 +162,10 @@ func parseArray(buffer []byte, index int) ParseResp {
 
 	if length64 < 0 {
 		return getParseErrorResp(common.ProtocolError("invalid array length"))
+	}
+
+	if length64 > int64(len(buffer)) {
+		return getParseNeedMoreDataResp()
 	}
 
 	length := int(length64)

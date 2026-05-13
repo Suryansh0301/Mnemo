@@ -4,153 +4,279 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/suryansh0301/mini-redis/internal/core/common"
+	"github.com/suryansh0301/mini-redis/internal/enums"
 )
 
-// Helper to reduce boilerplate
-func assertParsed(t *testing.T, input string, expectedConsumed int) ParseResp {
-	t.Helper()
-	result := Parse([]byte(input))
-
-	assert.NoError(t, result.Error())
-	assert.Equal(t, expectedConsumed, result.BytesConsumed())
-	return result
-}
-
-func assertError(t *testing.T, input string) {
-	t.Helper()
-	result := Parse([]byte(input))
-	assert.NoError(t, result.Error())
-}
-
-func assertNeedMoreData(t *testing.T, input string) {
-	t.Helper()
-	result := Parse([]byte(input))
-	assert.NoError(t, result.Error())
-	assert.Equal(t, 0, result.BytesConsumed())
-}
-
-// ── Simple String ────────────────────────────────────────────────
-
 func TestParseSimpleString(t *testing.T) {
-	result := assertParsed(t, "+OK\r\n", 5)
-	assert.Equal(t, "OK", result.Resp.Str)
-}
+	tests := []struct {
+		name     string
+		input    string
+		wantErr  bool
+		wantMore bool
+		consumed int
+		str      string
+	}{
+		{
+			name:     "valid OK",
+			input:    "+OK\r\n",
+			consumed: 5,
+			str:      "OK",
+		},
+		{
+			name:     "valid PONG",
+			input:    "+PONG\r\n",
+			consumed: 7,
+			str:      "PONG",
+		},
+		{
+			name:    "invalid newline",
+			input:   "+OK\r\r\n",
+			wantErr: true,
+		},
+		{
+			name:     "incomplete",
+			input:    "+OK",
+			wantMore: true,
+		},
+	}
 
-func TestParseSimpleStringWithContent(t *testing.T) {
-	result := assertParsed(t, "+PONG\r\n", 7)
-	assert.Equal(t, "PONG", result.Resp.Str)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Parse([]byte(tt.input))
+			if tt.wantErr {
+				assert.Error(t, result.Error())
+				return
+			}
+			if tt.wantMore {
+				assert.NoError(t, result.Error())
+				assert.Equal(t, 0, result.BytesConsumed())
+				return
+			}
+			assert.NoError(t, result.Error())
+			assert.Equal(t, tt.consumed, result.BytesConsumed())
+			assert.Equal(t, tt.str, result.Resp.Str)
+		})
+	}
 }
-
-func TestParseSimpleStringInvalidNewline(t *testing.T) {
-	assertError(t, "+OK\r\r\n") // \r inside string
-}
-
-func TestParseSimpleStringIncomplete(t *testing.T) {
-	assertNeedMoreData(t, "+OK") // missing \r\n
-}
-
-// ── Bulk String ──────────────────────────────────────────────────
 
 func TestParseBulkString(t *testing.T) {
-	result := assertParsed(t, "$3\r\nfoo\r\n", 9)
-	assert.Equal(t, "foo", result.Resp.Str)
-}
+	tests := []struct {
+		name     string
+		input    string
+		wantErr  bool
+		wantMore bool
+		isNull   bool
+		consumed int
+		str      string
+	}{
+		{
+			name:     "valid FOO",
+			input:    "$3\r\nfoo\r\n",
+			consumed: 9,
+			str:      "foo",
+		},
+		{
+			name:     "valid null bulk string",
+			input:    "$-1\r\n",
+			isNull:   true,
+			consumed: 5,
+		},
+		{
+			name:     "incomplete bulk string",
+			input:    "$3\r\nfo",
+			wantMore: true,
+		},
+		{
+			name:    "non numeric length",
+			input:   "$abc\r\nfoo\r\n",
+			wantErr: true,
+		},
+		{
+			name:    "negative length",
+			input:   "$-5\r\nfoo\r\n",
+			wantErr: true,
+		},
+		{
+			name:    "missing terminator wrong bytes",
+			input:   "$3\r\nfooXX",
+			wantErr: true,
+		},
+		{
+			name:     "missing terminator incomplete",
+			input:    "$3\r\nfoo",
+			wantMore: true,
+		},
+	}
 
-func TestParseBulkStringNull(t *testing.T) {
-	result := assertParsed(t, "$-1\r\n", 5)
-	assert.True(t, result.Resp.IsNull)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Parse([]byte(tt.input))
+			if tt.wantErr {
+				assert.Error(t, result.Error())
+				return
+			}
+			if tt.wantMore {
+				assert.NoError(t, result.Error())
+				assert.Equal(t, 0, result.BytesConsumed())
+				return
+			}
+			if tt.isNull {
+				assert.True(t, result.Resp.IsNull)
+				return
+			}
+			assert.NoError(t, result.Error())
+			assert.Equal(t, tt.consumed, result.BytesConsumed())
+			assert.Equal(t, tt.str, result.Resp.Str)
+		})
+	}
 }
-
-func TestParseBulkStringIncomplete(t *testing.T) {
-	assertNeedMoreData(t, "$3\r\nfo") // only 2 of 3 bytes
-}
-
-func TestParseBulkStringInvalidLength(t *testing.T) {
-	assertError(t, "$abc\r\nfoo\r\n") // non-numeric length
-}
-
-func TestParseBulkStringNegativeLength(t *testing.T) {
-	assertError(t, "$-5\r\nfoo\r\n") // invalid negative
-}
-
-func TestParseBulkStringMissingTerminator(t *testing.T) {
-	assertError(t, "$3\r\nfooXX") // no \r\n after payload
-}
-
-// ── Integer ──────────────────────────────────────────────────────
 
 func TestParseInteger(t *testing.T) {
-	result := assertParsed(t, ":42\r\n", 5)
-	assert.Equal(t, 42, result.Resp.Int)
-}
+	tests := []struct {
+		name     string
+		input    string
+		wantErr  bool
+		wantMore bool
+		consumed int
+		integer  int64
+	}{
+		{
+			name:     "valid OK",
+			input:    ":42\r\n",
+			consumed: 5,
+			integer:  42,
+		},
+		{
+			name:     "valid negative integer",
+			input:    ":-1\r\n",
+			consumed: 5,
+			integer:  -1},
+		{
+			name:    "invalid integer",
+			input:   ":abc\r\n",
+			wantErr: true,
+		},
+		{
+			name:     "incomplete",
+			input:    ":42",
+			wantMore: true,
+		},
+	}
 
-func TestParseIntegerNegative(t *testing.T) {
-	result := assertParsed(t, ":-1\r\n", 5)
-	assert.Equal(t, -1, result.Resp.Int)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Parse([]byte(tt.input))
+			if tt.wantErr {
+				assert.Error(t, result.Error())
+				return
+			}
+			if tt.wantMore {
+				assert.NoError(t, result.Error())
+				assert.Equal(t, 0, result.BytesConsumed())
+				return
+			}
+			assert.NoError(t, result.Error())
+			assert.Equal(t, tt.consumed, result.BytesConsumed())
+			assert.Equal(t, tt.integer, result.Resp.Int)
+		})
+	}
 }
-
-func TestParseIntegerInvalid(t *testing.T) {
-	assertError(t, ":abc\r\n")
-}
-
-func TestParseIntegerIncomplete(t *testing.T) {
-	assertNeedMoreData(t, ":42")
-}
-
-// ── Array ────────────────────────────────────────────────────────
 
 func TestParseArray(t *testing.T) {
-	// *2\r\n$4\r\nPING\r\n$4\r\nPONG\r\n
-	input := "*2\r\n$4\r\nPING\r\n$4\r\nPONG\r\n"
-	result := assertParsed(t, input, len(input))
+	tests := []struct {
+		name      string
+		input     string
+		wantErr   bool
+		wantMore  bool
+		isNull    bool
+		consumed  int
+		arrayLen  int
+		firstElem string
+	}{
+		{
+			name:      "valid two elements",
+			input:     "*2\r\n$4\r\nPING\r\n$4\r\nPONG\r\n",
+			consumed:  24,
+			arrayLen:  2,
+			firstElem: "PING",
+		},
+		{
+			name:     "null array",
+			input:    "*-1\r\n",
+			consumed: 5,
+			isNull:   true,
+		},
+		{
+			name:     "incomplete",
+			input:    "*2\r\n$4\r\nPING\r\n",
+			wantMore: true,
+		},
+		{
+			name:    "invalid length",
+			input:   "*abc\r\n",
+			wantErr: true,
+		},
+		{
+			name:    "negative length",
+			input:   "*-5\r\n",
+			wantErr: true,
+		},
+	}
 
-	assert.Equal(t, 2, len(result.Resp.Array))
-	assert.Equal(t, "PING", result.Resp.Array[0].Str)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Parse([]byte(tt.input))
+			if tt.wantErr {
+				assert.Error(t, result.Error())
+				return
+			}
+			if tt.wantMore {
+				assert.NoError(t, result.Error())
+				assert.Equal(t, 0, result.BytesConsumed())
+				return
+			}
+			assert.NoError(t, result.Error())
+			assert.Equal(t, tt.consumed, result.BytesConsumed())
+			if tt.isNull {
+				assert.True(t, result.Resp.IsNull)
+				return
+			}
+			assert.Equal(t, tt.arrayLen, len(result.Resp.Array))
+			if tt.firstElem != "" {
+				assert.Equal(t, tt.firstElem, result.Resp.Array[0].Str)
+			}
+		})
+	}
 }
-
-func TestParseArrayNull(t *testing.T) {
-	result := assertParsed(t, "*-1\r\n", 5)
-	assert.True(t, result.Resp.IsNull)
-}
-
-func TestParseArrayIncomplete(t *testing.T) {
-	// Array says 2 elements but only 1 provided
-	assertNeedMoreData(t, "*2\r\n$4\r\nPING\r\n")
-}
-
-func TestParseArrayInvalidLength(t *testing.T) {
-	assertError(t, "*abc\r\n")
-}
-
-// ── Pipelining ───────────────────────────────────────────────────
 
 func TestParsePipelined(t *testing.T) {
-	// Two commands back to back
 	input := "*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n"
 	buf := []byte(input)
 
 	first := Parse(buf)
 	assert.NoError(t, first.Error())
-	assert.Equal(t, 0, first.BytesConsumed())
+	assert.NotEqual(t, 0, first.BytesConsumed())
 
 	buf = buf[first.BytesConsumed():]
 
 	second := Parse(buf)
 	assert.NoError(t, second.Error())
-	assert.Equal(t, 0, second.BytesConsumed())
+	assert.NotEqual(t, 0, second.BytesConsumed())
 }
 
-// ── Edge Cases ───────────────────────────────────────────────────
-
 func TestParseEmptyBuffer(t *testing.T) {
-	assertNeedMoreData(t, "")
+	result := Parse([]byte(""))
+
+	assert.NoError(t, result.Error())
+	assert.Equal(t, 0, result.BytesConsumed())
 }
 
 func TestParseInvalidType(t *testing.T) {
-	assertError(t, "X invalid\r\n")
-}
+	result := Parse([]byte("X invalid\r\n"))
 
-// ── Fuzz ─────────────────────────────────────────────────────────
+	assert.Error(t, result.Error())
+}
 
 func FuzzParse(f *testing.F) {
 	// Seed with valid inputs
@@ -169,4 +295,38 @@ func FuzzParse(f *testing.F) {
 		}()
 		Parse(data)
 	})
+}
+
+// Round trip — parse what encoder produces
+func TestEncoderRoundTrip(t *testing.T) {
+	values := []common.RespValue{
+		{
+			Type: enums.SimpleStringRespType,
+			Str:  "OK",
+		},
+		{
+			Type: enums.IntRespType,
+			Int:  42,
+		},
+		{
+			Type: enums.BulkStringRespType,
+			Str:  "hello",
+		},
+		{
+			Type: enums.ErrorRespType,
+			Str:  "ERR something",
+		},
+		{
+			Type:   enums.BulkStringRespType,
+			IsNull: true,
+		},
+	}
+
+	for _, v := range values {
+		encoded := Encoder(v)
+		parsed := Parse(encoded)
+
+		assert.NoError(t, parsed.Error())
+		assert.Equal(t, len(encoded), parsed.BytesConsumed())
+	}
 }

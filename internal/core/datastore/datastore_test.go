@@ -12,8 +12,6 @@ func makeCommand(name string, args ...string) commands.Command {
 	return commands.Command{Name: name, Args: args}
 }
 
-// ── Unknown Command ───────────────────────────────────────────────
-
 func TestExecuteUnknownCommand(t *testing.T) {
 	exec := NewExecutor()
 	resp := exec.Execute(makeCommand("INVALID"))
@@ -23,16 +21,12 @@ func TestExecuteUnknownCommand(t *testing.T) {
 	assert.Equal(t, expected, resp.Str)
 }
 
-// ── PING ──────────────────────────────────────────────────────────
-
 func TestExecutePing(t *testing.T) {
 	exec := NewExecutor()
 	resp := exec.Execute(makeCommand("PING"))
 	assert.Equal(t, enums.SimpleStringRespType, resp.Type)
 	assert.Equal(t, "PONG", resp.Str)
 }
-
-// ── SET / GET ─────────────────────────────────────────────────────
 
 func TestExecuteSetGet(t *testing.T) {
 	exec := NewExecutor()
@@ -52,27 +46,27 @@ func TestExecuteSetGet(t *testing.T) {
 	assert.True(t, getMissing.IsNull)
 }
 
-// ── INCR ──────────────────────────────────────────────────────────
-
 func TestExecuteIncr(t *testing.T) {
 	exec := NewExecutor()
 
 	// INCR missing key — should start from 0
 	resp := exec.Execute(makeCommand("INCR", "counter"))
 	assert.Equal(t, enums.IntRespType, resp.Type)
-	assert.Equal(t, 1, resp.Int)
+	assert.Equal(t, int64(1), resp.Int)
+
+	// check if key is present or not
+	resp = exec.Execute(makeCommand("GET", "counter"))
+	assert.Equal(t, "1", resp.Str)
 
 	// INCR again
 	resp = exec.Execute(makeCommand("INCR", "counter"))
-	assert.Equal(t, 2, resp.Int)
+	assert.Equal(t, int64(2), resp.Int)
 
 	// INCR non integer
 	exec.Execute(makeCommand("SET", "foo", "bar"))
 	resp = exec.Execute(makeCommand("INCR", "foo"))
 	assert.Equal(t, enums.ErrorRespType, resp.Type)
 }
-
-// ── DEL ───────────────────────────────────────────────────────────
 
 func TestExecuteDel(t *testing.T) {
 	exec := NewExecutor()
@@ -82,7 +76,7 @@ func TestExecuteDel(t *testing.T) {
 	// DEL existing
 	resp := exec.Execute(makeCommand("DEL", "foo"))
 	assert.Equal(t, enums.IntRespType, resp.Type)
-	assert.Equal(t, 1, resp.Int)
+	assert.Equal(t, int64(1), resp.Int)
 
 	// Verify deleted
 	getResp := exec.Execute(makeCommand("GET", "foo"))
@@ -90,10 +84,8 @@ func TestExecuteDel(t *testing.T) {
 
 	// DEL missing
 	resp = exec.Execute(makeCommand("DEL", "foo"))
-	assert.Equal(t, 0, resp.Int)
+	assert.Equal(t, int64(0), resp.Int)
 }
-
-// ── State isolation ───────────────────────────────────────────────
 
 func TestExecutorStateIsolation(t *testing.T) {
 	// Two executors should have independent datastores
@@ -104,4 +96,13 @@ func TestExecutorStateIsolation(t *testing.T) {
 
 	resp := exec2.Execute(makeCommand("GET", "foo"))
 	assert.True(t, resp.IsNull)
+}
+
+func TestExecuteOverwrite(t *testing.T) {
+	exec := NewExecutor()
+	exec.Execute(makeCommand("SET", "foo", "bar"))
+	exec.Execute(makeCommand("SET", "foo", "baz"))
+
+	resp := exec.Execute(makeCommand("GET", "foo"))
+	assert.Equal(t, "baz", resp.Str)
 }

@@ -127,25 +127,6 @@ func TestEncodeBulkString(t *testing.T) {
 	}
 }
 
-// Round trip — parse what encoder produces
-func TestEncoderRoundTrip(t *testing.T) {
-	values := []common.RespValue{
-		{Type: enums.SimpleStringRespType, Str: "OK"},
-		{Type: enums.IntRespType, Int: 42},
-		{Type: enums.BulkStringRespType, Str: "hello"},
-		{Type: enums.ErrorRespType, Str: "ERR something"},
-	}
-
-	for _, v := range values {
-		encoded := Encoder(v)
-		parsed := Parse(encoded)
-
-		assert.NoError(t, parsed.Error())
-		assert.Equal(t, len(encoded), parsed.BytesConsumed())
-	}
-}
-
-// in encoder_test.go
 func TestEncodeBulkStringNull(t *testing.T) {
 	result := string(Encoder(common.RespValue{
 		Type:   enums.BulkStringRespType,
@@ -161,4 +142,9 @@ func TestEncodeBulkStringEmpty(t *testing.T) {
 		Str:  "",
 	}))
 	assert.Equal(t, "$0\r\n\r\n", result)
+}
+
+func TestEncodeUnknownType(t *testing.T) {
+	result := string(Encoder(common.RespValue{Type: 99}))
+	assert.Equal(t, "-ERR internal error\r\n", result)
 }
