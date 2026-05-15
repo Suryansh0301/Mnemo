@@ -2,15 +2,25 @@ package main
 
 import (
 	"bufio"
+	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
+	"os"
 	"sync"
+	"sync/atomic"
+	"time"
 
-	"github.com/suryansh0301/mini-redis/internal/core/common"
-	"github.com/suryansh0301/mini-redis/internal/core/datastore"
-	parser "github.com/suryansh0301/mini-redis/internal/core/protocol/resp"
-	"github.com/suryansh0301/mini-redis/internal/enums"
+	"github.com/suryansh0301/Mnemo/internal/core/common"
+	"github.com/suryansh0301/Mnemo/internal/core/datastore"
+	parser "github.com/suryansh0301/Mnemo/internal/core/protocol/resp"
+	"github.com/suryansh0301/Mnemo/internal/enums"
+)
+
+const (
+	ReadTimeout  = 30 * time.Second
+	WriteTimeout = 30 * time.Second
 )
 
 type client struct {
@@ -20,6 +30,7 @@ type client struct {
 	pendingRequest sync.WaitGroup
 	parserBuffer   []byte
 	readBuffer     []byte
+	conn           net.Conn
 }
 
 func newClient(connection net.Conn) *client {
@@ -32,42 +43,66 @@ func newClient(connection net.Conn) *client {
 		responseChan: make(chan common.RespValue, 256),
 		parserBuffer: make([]byte, 0, 4096),
 		readBuffer:   make([]byte, 4096),
+		conn:         connection,
 	}
 }
 
-func (c *client) handleConnection(conn net.Conn, exec *datastore.Executor) {
-	defer conn.Close()
+func (c *client) handleConnection(exec *datastore.Executor, totalClients *atomic.Int64) {
+	_, cancel := context.WithCancel(context.Background())
+
+	defer c.conn.Close()
 	defer func() {
 		c.drainRequests()
 		close(c.responseChan)
+		totalClients.Add(-1)
 	}()
+	defer cancel()
 
-	go c.handleWrites()
+	go c.handleWrites(cancel)
 	c.handleReads(exec)
 }
 
-func (c *client) handleWrites() {
+func (c *client) handleWrites(cancel context.CancelFunc) {
 	for resp := range c.responseChan {
 		byteResp := parser.Encoder(resp)
-		_, err := c.writer.Write(byteResp)
+		c.handleWrite(cancel, byteResp)
+
+	}
+}
+
+func (c *client) handleWrite(cancel context.CancelFunc, byteResp []byte) {
+	var err error
+
+	defer func() {
+		c.decreasePendingRequest()
 		if err != nil {
 			slog.Info("encountered error while writing", "error", err.Error())
+			c.setReadDeadline(-1)
+			cancel()
 		}
-		if len(c.responseChan) == 0 {
-			err = c.writer.Flush()
-			if err != nil {
-				slog.Info("encountered error while writing", "error", err.Error())
-			}
-		}
-		c.decreasePendingRequest()
+	}()
+
+	_, err = c.writer.Write(byteResp)
+	if err != nil {
+		return
 	}
+
+	if len(c.responseChan) == 0 {
+		c.setWriteDeadline(WriteTimeout)
+		err = c.writer.Flush()
+		if err != nil {
+			return
+		}
+	}
+
 }
 
 func (c *client) handleReads(exec *datastore.Executor) {
 	for {
+		c.conn.SetReadDeadline(time.Now().Add(ReadTimeout))
 		n, err := c.read()
 		if err != nil {
-			if err != io.EOF {
+			if err != io.EOF && !errors.Is(err, os.ErrDeadlineExceeded) {
 				c.handleError()
 			}
 			return
@@ -141,4 +176,14 @@ func (c *client) decreasePendingRequest() {
 
 func (c *client) drainRequests() {
 	c.pendingRequest.Wait()
+}
+
+func (c *client) setReadDeadline(duration time.Duration) error {
+	err := c.conn.SetReadDeadline(time.Now().Add(duration))
+	return err
+}
+
+func (c *client) setWriteDeadline(duration time.Duration) error {
+	err := c.conn.SetWriteDeadline(time.Now().Add(duration))
+	return err
 }

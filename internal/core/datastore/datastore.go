@@ -3,9 +3,9 @@ package datastore
 import (
 	"fmt"
 
-	"github.com/suryansh0301/mini-redis/internal/core/commands"
-	"github.com/suryansh0301/mini-redis/internal/core/common"
-	"github.com/suryansh0301/mini-redis/internal/enums"
+	"github.com/suryansh0301/Mnemo/internal/core/commands"
+	"github.com/suryansh0301/Mnemo/internal/core/common"
+	"github.com/suryansh0301/Mnemo/internal/enums"
 )
 
 type Executor struct {

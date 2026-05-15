@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/suryansh0301/mini-redis/internal/core/common"
-	"github.com/suryansh0301/mini-redis/internal/enums"
+	"github.com/suryansh0301/Mnemo/internal/core/common"
+	"github.com/suryansh0301/Mnemo/internal/enums"
 )
 
 func TestEncodeSimpleString(t *testing.T) {

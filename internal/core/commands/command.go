@@ -4,8 +4,8 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/suryansh0301/mini-redis/internal/core/common"
-	"github.com/suryansh0301/mini-redis/internal/enums"
+	"github.com/suryansh0301/Mnemo/internal/core/common"
+	"github.com/suryansh0301/Mnemo/internal/enums"
 )
 
 type Command struct {

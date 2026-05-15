@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"strconv"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/suryansh0301/mini-redis/internal/core/datastore"
 )
 
 // ── Server Setup ──────────────────────────────────────────────────
@@ -23,14 +23,8 @@ func startTestServer(t *testing.T) string {
 		t.Fatalf("error in listening to the port: %s", err)
 	}
 
-	exec := datastore.NewExecutor()
-
-	go func() {
-		for value := range exec.ExecutorChan {
-			response := exec.Execute(value.Command)
-			value.ResponseChan <- response
-		}
-	}()
+	exec := startExecutor()
+	var totalClients atomic.Int64
 
 	go func() {
 		for {
@@ -38,8 +32,28 @@ func startTestServer(t *testing.T) string {
 			if err != nil {
 				return
 			}
+
+			accepted := false
+		inner:
+			for {
+				current := totalClients.Load()
+				if current >= MaxClients {
+					conn.Write([]byte("-ERR max number of clients reached\r\n"))
+					conn.Close()
+					break inner
+				}
+				if totalClients.CompareAndSwap(current, current+1) {
+					accepted = true
+					break
+				}
+			}
+
+			if !accepted {
+				continue
+			}
+
 			client := newClient(conn)
-			go client.handleConnection(conn, exec)
+			go client.handleConnection(exec, &totalClients)
 		}
 	}()
 

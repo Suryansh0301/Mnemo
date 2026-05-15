@@ -34,7 +34,7 @@ COPY . .
 # GOARCH=amd64 means compile for 64 bit cpu ,
 # this is done to gurantee compaitability
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-  go build -o mini-redis ./cmd/server
+  go build -o Mnemo ./cmd/server
 
 # ---- Runtime Stage ----
 # distroles image is basically an image containing the program and its runtime
@@ -47,11 +47,11 @@ WORKDIR /app
 # The COPY --from flag lets you copy files from an image, a build stage, 
 # or a named context instead.
 # here we are copying from our build stage
-COPY --from=builder /app/mini-redis .
+COPY --from=builder /app/Mnemo .
 
 #this is the port we will export
 EXPOSE 6379
-ENTRYPOINT ["/app/mini-redis"]
+ENTRYPOINT ["/app/Mnemo"]
 # the entrypoint here is defined in vector form here instead of
 # normally because distroless doesn't have a shell hence using
-# ENTRYPOINT "/app/mini-redis" will give error
+# ENTRYPOINT "/app/Mnemo" will give error

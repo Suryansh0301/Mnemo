@@ -55,14 +55,14 @@ Each layer has a single responsibility and is independently testable. The single
 
 Implemented against the official Redis protocol specification.
 
-| Type          | Wire Format                              |
-|---------------|------------------------------------------|
-| Simple String | `+OK\r\n`                                |
-| Error         | `-ERR message\r\n`                       |
-| Integer       | `:1000\r\n`                              |
-| Bulk String   | `$5\r\nhello\r\n`                        |
-| Null Bulk     | `$-1\r\n`                                |
-| Array         | `*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n`      |
+| Type          | Wire Format                        |
+| ------------- | ---------------------------------- |
+| Simple String | `+OK\r\n`                          |
+| Error         | `-ERR message\r\n`                 |
+| Integer       | `:1000\r\n`                        |
+| Bulk String   | `$5\r\nhello\r\n`                  |
+| Null Bulk     | `$-1\r\n`                          |
+| Array         | `*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n` |
 
 The parser treats TCP as a continuous byte stream with no assumptions about message boundaries. Every parse attempt returns one of three states: `Success`, `NeedMoreData`, or `ProtocolError`, with exact byte accounting for safe buffer advancement.
 
@@ -70,15 +70,15 @@ The parser treats TCP as a continuous byte stream with no assumptions about mess
 
 ## Implemented Commands
 
-| Command          | Response       |
-|------------------|----------------|
-| `PING`           | `+PONG`        |
-| `SET key value`  | `+OK`          |
-| `GET key`        | Bulk string    |
-| `GET missing`    | Null bulk      |
-| `INCR key`       | Integer        |
-| `DEL key`        | Integer        |
-| `ECHO value`     | Bulk string    |
+| Command         | Response    |
+| --------------- | ----------- |
+| `PING`          | `+PONG`     |
+| `SET key value` | `+OK`       |
+| `GET key`       | Bulk string |
+| `GET missing`   | Null bulk   |
+| `INCR key`      | Integer     |
+| `DEL key`       | Integer     |
+| `ECHO value`    | Bulk string |
 
 ---
 
@@ -100,22 +100,22 @@ redis-benchmark -p 6379 -c 50 -n 100000 -t set,get --dbnum 0 -q -P 32
 redis-benchmark -p 6379 -c 100 -n 100000 -t set,get --dbnum 0 -q -P 8
 ```
 
-| Optimization                  | What Changed                                                                                      |
-|-------------------------------|---------------------------------------------------------------------------------------------------|
-| Baseline                      | Naive implementation, flush on every write                                                        |
-| Adaptive Flush                | Flush only when the response channel is empty, batching writes under load                         |
-| Buffer Pool (scratch space)   | Replaced `fmt.Sprintf` in encoder with append-based formatting; added `sync.Pool` for scratch buffers, reducing GC pressure while keeping exact-size final allocations |
-| Parser Buffer Reset           | `buf[:0]` slice reset to reuse underlying array across reads, avoiding fresh allocations          |
-| Executor Channel Size Tuning  | Tested 512, 1024, 2048, 4096; settled on 1024 as the optimal balance                             |
+| Optimization                 | What Changed                                                                                                                                                           |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Baseline                     | Naive implementation, flush on every write                                                                                                                             |
+| Adaptive Flush               | Flush only when the response channel is empty, batching writes under load                                                                                              |
+| Buffer Pool (scratch space)  | Replaced `fmt.Sprintf` in encoder with append-based formatting; added `sync.Pool` for scratch buffers, reducing GC pressure while keeping exact-size final allocations |
+| Parser Buffer Reset          | `buf[:0]` slice reset to reuse underlying array across reads, avoiding fresh allocations                                                                               |
+| Executor Channel Size Tuning | Tested 512, 1024, 2048, 4096; settled on 1024 as the optimal balance                                                                                                   |
 
 **Results at pipeline depth P32 (SET / GET):**
 
-| Run | Pipeline Depth | SET ops/sec   | GET ops/sec   | SET p50   | GET p50   |
-|-----|----------------|---------------|---------------|-----------|-----------|
-| 1   | P1 (no pipeline) | ~70,000     | ~70,000       | ~0.40 ms  | ~0.40 ms  |
-| 2   | P8             | ~800,000      | ~885,000      | ~0.50 ms  | ~0.48 ms  |
-| 3   | P32            | ~1,176,000    | ~1,315,000    | ~0.69 ms  | ~0.66 ms  |
-| 4   | P8 (c100)      | ~534,000      | ~529,000      | ~0.78 ms  | ~0.79 ms  |
+| Run | Pipeline Depth   | SET ops/sec | GET ops/sec | SET p50  | GET p50  |
+| --- | ---------------- | ----------- | ----------- | -------- | -------- |
+| 1   | P1 (no pipeline) | ~70,000     | ~70,000     | ~0.40 ms | ~0.40 ms |
+| 2   | P8               | ~800,000    | ~885,000    | ~0.50 ms | ~0.48 ms |
+| 3   | P32              | ~1,176,000  | ~1,315,000  | ~0.69 ms | ~0.66 ms |
+| 4   | P8 (c100)        | ~534,000    | ~529,000    | ~0.78 ms | ~0.79 ms |
 
 ---
 
@@ -158,17 +158,17 @@ The runtime image contains no shell, no package manager, and no toolchain — on
 
 ## Roadmap
 
-| Phase | Focus                        | Status      |
-|-------|------------------------------|-------------|
-| 1     | Correctness and test suite   | Complete    |
-| 2     | Benchmarking and optimization| Complete    |
-| 3     | Backpressure and overload protection | In Progress |
-| 4     | Mnemo-CLI compatibility      | Planned     |
-| 5     | Data structures (Lists, Hashes, Sets) | Planned |
-| 6     | Persistence (AOF + RDB)      | Planned     |
-| 7     | Observability (structured logging, INFO, metrics) | Planned |
-| 8     | Transactions (MULTI/EXEC/WATCH) | Planned  |
-| 9     | Memory management (LRU, maxmemory, TTL expiry) | Planned |
+| Phase | Focus                                             | Status      |
+| ----- | ------------------------------------------------- | ----------- |
+| 1     | Correctness and test suite                        | Complete    |
+| 2     | Benchmarking and optimization                     | Complete    |
+| 3     | Backpressure and overload protection              | Complete    |
+| 4     | Mnemo-CLI compatibility                           | In Progress |
+| 5     | Data structures (Lists, Hashes, Sets)             | Planned     |
+| 6     | Persistence (AOF + RDB)                           | Planned     |
+| 7     | Observability (structured logging, INFO, metrics) | Planned     |
+| 8     | Transactions (MULTI/EXEC/WATCH)                   | Planned     |
+| 9     | Memory management (LRU, maxmemory, TTL expiry)    | Planned     |
 
 ---
 

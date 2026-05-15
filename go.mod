@@ -1,4 +1,4 @@
-module github.com/suryansh0301/mini-redis
+module github.com/suryansh0301/Mnemo
 
 go 1.24.0
 

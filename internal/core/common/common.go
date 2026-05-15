@@ -3,7 +3,7 @@ package common
 import (
 	"fmt"
 
-	"github.com/suryansh0301/mini-redis/internal/enums"
+	"github.com/suryansh0301/Mnemo/internal/enums"
 )
 
 type RespValue struct {
